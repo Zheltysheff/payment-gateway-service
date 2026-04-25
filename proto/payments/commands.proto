@@ -1,0 +1,15 @@
+syntax = "proto3";
+
+package payments;
+
+option go_package = "payment-gateway-service/internal/pb/payments;payments";
+
+message CreatePaymentCommand {
+  string payment_id  = 1;
+  int64  amount      = 2;
+  string currency    = 3;
+  string merchant_id = 4;
+  string order_id    = 5;
+  string user_id     = 6;
+  int64  issued_at   = 7;
+}

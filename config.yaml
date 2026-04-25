@@ -1,0 +1,22 @@
+service:
+  name: api-service
+  http:
+    port: 8080
+
+postgres:
+  url: postgres://admin:admin@postgres:5432/payments?sslmode=disable
+  pool:
+    max_conns: 16
+    min_conns: 1
+    max_conn_lifetime: 1h
+
+kafka:
+  brokers:
+    - kafka:9092
+  topics:
+    commands: payments.commands
+    events:   payments.events
+
+observability:
+  otlp:
+    endpoint: jaeger:4318
