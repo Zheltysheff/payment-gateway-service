@@ -10,7 +10,12 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
+type ClientConfig struct {
+	Url string `yaml:"url"`
+}
+
 type Config struct {
+	Client        ClientConfig        `yaml:"client"`
 	Service       ServiceConfig       `yaml:"service"`
 	Postgres      PostgresConfig      `yaml:"postgres"`
 	Kafka         KafkaConfig         `yaml:"kafka"`

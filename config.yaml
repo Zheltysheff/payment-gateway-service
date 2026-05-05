@@ -1,3 +1,6 @@
+client:
+  url: http://api:8080
+
 service:
   name: api-service
   http:

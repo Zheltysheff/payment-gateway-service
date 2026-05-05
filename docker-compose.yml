@@ -110,6 +110,18 @@ services:
       jaeger:
         condition: service_started
 
+  loadgen:
+    build:
+      context: .
+      args:
+        BUILD_TARGET: loadgen
+    volumes:
+      - ./config.yaml:/etc/payment-gateway/config.yaml:ro
+    depends_on:
+      api:
+        condition: service_started
+    restart: unless-stopped
+
 volumes:
   postgres-data:
   grafana-data:

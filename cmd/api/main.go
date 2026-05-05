@@ -29,7 +29,7 @@ func main() {
 	flag.Parse()
 
 	if err := run(logger, *configPath); err != nil {
-		logger.Error("Fatal", "error", err)
+		logger.Error("fatal", "error", err)
 		os.Exit(1)
 	}
 }
@@ -51,7 +51,7 @@ func run(logger *slog.Logger, configPath string) error {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := shutdownTracing(ctx); err != nil {
-			logger.Warn("Shutdown tracing", "error", err)
+			logger.Warn("shutdown tracing", "error", err)
 		}
 	}()
 
@@ -64,10 +64,13 @@ func run(logger *slog.Logger, configPath string) error {
 	}
 	defer pool.Close()
 
-	producer := kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topics.Commands)
+	producer, err := kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topics.Commands)
+	if err != nil {
+		return err
+	}
 	defer func() {
 		if err := producer.Close(); err != nil {
-			logger.Warn("Close kafka producer", "error", err)
+			logger.Warn("close kafka producer", "error", err)
 		}
 	}()
 
@@ -87,7 +90,7 @@ func run(logger *slog.Logger, configPath string) error {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("HTTP server working at ", "addr", server.Addr)
+		logger.Info("http server starting", "addr", server.Addr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
@@ -96,7 +99,7 @@ func run(logger *slog.Logger, configPath string) error {
 
 	select {
 	case <-rootCtx.Done():
-		logger.Info("Shutdown signal received")
+		logger.Info("shutdown signal received")
 	case err := <-serverErr:
 		if err != nil {
 			return err
@@ -106,7 +109,7 @@ func run(logger *slog.Logger, configPath string) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		logger.Warn("Http server shutdown", "error", err)
+		logger.Warn("http server shutdown", "error", err)
 	}
 	return nil
 }
