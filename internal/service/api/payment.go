@@ -19,6 +19,7 @@ type CommandPublisher interface {
 
 type CreatePaymentCommand struct {
 	PaymentID  uuid.UUID
+	CommandID  uuid.UUID
 	Amount     int64
 	Currency   string
 	MerchantID string

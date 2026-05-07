@@ -1,0 +1,16 @@
+syntax = "proto3";
+
+package payments;
+
+option go_package = "payment-gateway-service/internal/pb/payments;payments";
+
+message PaymentCreatedEvent {
+  string payment_id  = 1;
+  string command_id  = 2;
+  int64  amount      = 3;
+  string currency    = 4;
+  string merchant_id = 5;
+  string order_id    = 6;
+  string user_id     = 7;
+  int64  occurred_at = 8;
+}

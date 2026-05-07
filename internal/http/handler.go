@@ -29,6 +29,17 @@ func NewHandler(svc PaymentService, logger *slog.Logger) *Handler {
 }
 
 func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
+	keyHeader := r.Header.Get("Idempotency-Key")
+	if keyHeader == "" {
+		writeError(w, http.StatusBadRequest, "Idempotency-Key header is required")
+		return
+	}
+	commandID, err := uuid.Parse(keyHeader)
+	if err != nil {
+		writeError(w, http.StatusBadRequest, "Idempotency-Key must be a valid UUID")
+		return
+	}
+
 	var req createPaymentRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		writeError(w, http.StatusBadRequest, "Invalid json body")
@@ -43,6 +54,7 @@ func (h *Handler) CreatePayment(w http.ResponseWriter, r *http.Request) {
 
 	cmd := api.CreatePaymentCommand{
 		PaymentID:  id,
+		CommandID:  commandID,
 		Amount:     req.Amount,
 		Currency:   strings.ToUpper(req.Currency),
 		MerchantID: req.MerchantID,

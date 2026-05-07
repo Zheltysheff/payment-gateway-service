@@ -20,15 +20,17 @@ CREATE TABLE IF NOT EXISTS payments (
 );
 
 CREATE TABLE payment_events (
-    id          BIGSERIAL   PRIMARY KEY,
-    payment_id  UUID        NOT NULL,
-    event_type  TEXT        NOT NULL,
-    payload     JSONB       NOT NULL,
-    occurred_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    id           BIGSERIAL   PRIMARY KEY,
+    payment_id   UUID        NOT NULL,
+    event_type   TEXT        NOT NULL,
+    payload      JSONB       NOT NULL,
+    occurred_at  TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    published_at TIMESTAMPTZ
 );
 
 CREATE TABLE processed_commands (
-    payment_id   UUID        PRIMARY KEY,
+    command_id   UUID        PRIMARY KEY,
+    payment_id   UUID        NOT NULL,
     command_type TEXT        NOT NULL,
     processed_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );

@@ -16,10 +16,15 @@ type ClientConfig struct {
 
 type Config struct {
 	Client        ClientConfig        `yaml:"client"`
-	Service       ServiceConfig       `yaml:"service"`
+	Service       ServicesConfig      `yaml:"service"`
 	Postgres      PostgresConfig      `yaml:"postgres"`
 	Kafka         KafkaConfig         `yaml:"kafka"`
 	Observability ObservabilityConfig `yaml:"observability"`
+}
+
+type ServicesConfig struct {
+	Api    ServiceConfig `yaml:"api"`
+	Worker ServiceConfig `yaml:"worker"`
 }
 
 type ServiceConfig struct {
@@ -45,6 +50,7 @@ type PostgresPoolConfig struct {
 type KafkaConfig struct {
 	Brokers []string          `yaml:"brokers"`
 	Topics  KafkaTopicsConfig `yaml:"topics"`
+	GroupID string            `yaml:"group_id"`
 }
 
 type KafkaTopicsConfig struct {
@@ -81,11 +87,14 @@ func Load(path string) (Config, error) {
 
 func (c Config) Validate() error {
 	var errs []error
-	if c.Service.Name == "" {
-		errs = append(errs, errors.New("service.name is required"))
+	if c.Service.Api.Name == "" {
+		errs = append(errs, errors.New("service.api.name is required"))
 	}
-	if c.Service.HTTP.Port == 0 {
-		errs = append(errs, errors.New("service.http.port is required"))
+	if c.Service.Api.HTTP.Port == 0 {
+		errs = append(errs, errors.New("service.api.http.port is required"))
+	}
+	if c.Service.Worker.Name == "" {
+		errs = append(errs, errors.New("service.worker.name is required"))
 	}
 	if c.Postgres.Url == "" {
 		errs = append(errs, errors.New("postgres.url is required"))

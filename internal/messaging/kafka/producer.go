@@ -5,10 +5,14 @@ import (
 	"fmt"
 
 	"github.com/IBM/sarama"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 
 	payments "payment-gateway-service/internal/pb/payments"
 	"payment-gateway-service/internal/service/api"
+	"payment-gateway-service/internal/service/worker"
 )
 
 type Producer struct {
@@ -36,8 +40,14 @@ func (p *Producer) Close() error {
 }
 
 func (p *Producer) PublishCreatePayment(ctx context.Context, cmd api.CreatePaymentCommand) error {
+	tracer := otel.Tracer("kafka.producer")
+	ctx, span := tracer.Start(ctx, "publish "+p.commandTopic,
+		trace.WithSpanKind(trace.SpanKindProducer),
+	)
+	defer span.End()
 	pbCmd := &payments.CreatePaymentCommand{
 		PaymentId:  cmd.PaymentID.String(),
+		CommandId:  cmd.CommandID.String(),
 		Amount:     cmd.Amount,
 		Currency:   cmd.Currency,
 		MerchantId: cmd.MerchantID,
@@ -51,14 +61,18 @@ func (p *Producer) PublishCreatePayment(ctx context.Context, cmd api.CreatePayme
 		return fmt.Errorf("Marshal CreatePaymentCommand: %w", err)
 	}
 
+	headers := []sarama.RecordHeader{
+		{Key: []byte("command_type"), Value: []byte(string(worker.CmdCreatePayment))},
+		{Key: []byte("content_type"), Value: []byte("application/x-protobuf")},
+	}
+
+	otel.GetTextMapPropagator().Inject(ctx, &producerHeadersCarrier{headers: &headers})
+
 	msg := &sarama.ProducerMessage{
-		Topic: p.commandTopic,
-		Key:   sarama.StringEncoder(cmd.PaymentID.String()),
-		Value: sarama.ByteEncoder(value),
-		Headers: []sarama.RecordHeader{
-			{Key: []byte("command_type"), Value: []byte("CreatePayment")},
-			{Key: []byte("content_type"), Value: []byte("application/x-protobuf")},
-		},
+		Topic:   p.commandTopic,
+		Key:     sarama.StringEncoder(cmd.PaymentID.String()),
+		Value:   sarama.ByteEncoder(value),
+		Headers: headers,
 	}
 
 	type result struct {
@@ -75,7 +89,9 @@ func (p *Producer) PublishCreatePayment(ctx context.Context, cmd api.CreatePayme
 		return ctx.Err()
 	case r := <-done:
 		if r.err != nil {
-			return fmt.Errorf("Send kafka message: %w", r.err)
+			span.RecordError(r.err)
+			span.SetStatus(codes.Error, "send failed")
+			return fmt.Errorf("send kafka message: %w", r.err)
 		}
 		return nil
 	}

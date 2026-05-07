@@ -43,7 +43,7 @@ func run(logger *slog.Logger, configPath string) error {
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	shutdownTracing, err := observability.SetupTracing(rootCtx, cfg.Service.Name, cfg.Observability.OTLP.Endpoint)
+	shutdownTracing, err := observability.SetupTracing(rootCtx, cfg.Service.Api.Name, cfg.Observability.OTLP.Endpoint)
 	if err != nil {
 		return err
 	}
@@ -74,13 +74,13 @@ func run(logger *slog.Logger, configPath string) error {
 		}
 	}()
 
-	repo := postgres.NewPaymentRepository(pool)
-	paymentService := paymentapi.New(repo, producer)
+	paymentRepo := postgres.NewPaymentRepository(pool)
+	paymentService := paymentapi.New(paymentRepo, producer)
 	handler := httpHandler.NewHandler(paymentService, logger)
 	router := httpHandler.NewRouter(handler, registry, httpMetrics)
 
 	server := &http.Server{
-		Addr:              net.JoinHostPort("", strconv.Itoa(cfg.Service.HTTP.Port)),
+		Addr:              net.JoinHostPort("", strconv.Itoa(cfg.Service.Api.HTTP.Port)),
 		Handler:           router,
 		ReadHeaderTimeout: 5 * time.Second,
 		ReadTimeout:       30 * time.Second,
@@ -90,7 +90,7 @@ func run(logger *slog.Logger, configPath string) error {
 
 	serverErr := make(chan error, 1)
 	go func() {
-		logger.Info("http server starting", "addr", server.Addr)
+		logger.Info("HTTP server starting", "addr", server.Addr)
 		if err := server.ListenAndServe(); err != nil && !errors.Is(err, http.ErrServerClosed) {
 			serverErr <- err
 		}
@@ -109,7 +109,7 @@ func run(logger *slog.Logger, configPath string) error {
 	shutdownCtx, cancel := context.WithTimeout(context.Background(), 15*time.Second)
 	defer cancel()
 	if err := server.Shutdown(shutdownCtx); err != nil {
-		logger.Warn("http server shutdown", "error", err)
+		logger.Warn("HTTP server shutdown", "error", err)
 	}
 	return nil
 }

@@ -52,10 +52,10 @@ services:
       - |
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
           --create --if-not-exists --topic payments.commands \
-          --partitions 1 --replication-factor 1 && \
+          --partitions 2 --replication-factor 1 && \
         /opt/kafka/bin/kafka-topics.sh --bootstrap-server kafka:9092 \
           --create --if-not-exists --topic payments.events \
-          --partitions 1 --replication-factor 1 && \
+          --partitions 2 --replication-factor 1 && \
         echo 'topics created'
     restart: "no"
 
@@ -109,6 +109,21 @@ services:
         condition: service_completed_successfully
       jaeger:
         condition: service_started
+
+  worker:
+    build:
+      context: .
+      args:
+        BUILD_TARGET: worker
+    volumes:
+       - ./config.yaml:/etc/payment-gateway/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
 
   loadgen:
     build:

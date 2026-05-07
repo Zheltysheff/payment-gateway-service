@@ -76,14 +76,16 @@ func run(logger *slog.Logger, configPath string) error {
 			return fmt.Errorf("marshal request: %w", err)
 		}
 
-		logger.Info("create request", "payment_id", req.PaymentID)
-
 		httpReq, err := http.NewRequestWithContext(rootCtx, http.MethodPost, cfg.Client.Url+"/api/payments",
 			bytes.NewReader(body))
 		if err != nil {
 			return err
 		}
+		idempotencyKey := uuid.New().String()
+		httpReq.Header.Set("Idempotency-Key", idempotencyKey)
 		httpReq.Header.Set("Content-Type", "application/json")
+
+		logger.Info("create request", "payment_id", req.PaymentID, "idempotency_key", idempotencyKey)
 
 		resp, err := client.Do(httpReq)
 		if err != nil {

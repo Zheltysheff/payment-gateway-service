@@ -20,7 +20,7 @@ func NewPaymentRepository(pool *pgxpool.Pool) *PaymentRepository {
 	return &PaymentRepository{pool}
 }
 
-const getByIDQuery = `
+const getByIdQuery = `
 SELECT id, amount, currency, merchant_id, order_id, user_id, status, created_at, updated_at
 FROM payments
 WHERE id = $1
@@ -28,7 +28,7 @@ WHERE id = $1
 
 func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Payment, error) {
 	var p domain.Payment
-	err := r.pool.QueryRow(ctx, getByIDQuery, id).Scan(
+	err := r.pool.QueryRow(ctx, getByIdQuery, id).Scan(
 		&p.ID,
 		&p.Amount,
 		&p.Currency,
@@ -43,7 +43,7 @@ func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 		return nil, domain.ErrPaymentNotFound
 	}
 	if err != nil {
-		return nil, fmt.Errorf("Get payment %s: %w", id, err)
+		return nil, fmt.Errorf("repo get payment %s: %w", id, err)
 	}
 	return &p, nil
 }
