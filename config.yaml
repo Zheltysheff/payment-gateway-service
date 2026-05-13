@@ -8,6 +8,8 @@ service:
       port: 8080
   worker:
     name: worker-service
+  projection:
+    name: projection-service
 
 postgres:
   url: postgres://admin:admin@postgres:5432/payments?sslmode=disable
@@ -22,7 +24,9 @@ kafka:
   topics:
     commands: payments.commands
     events:   payments.events
-  group_id: payment-worker
+  group_ids:
+    worker: payment-worker
+    projection: payment-projection 
 
 observability:
   otlp:

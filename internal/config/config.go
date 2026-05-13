@@ -23,8 +23,9 @@ type Config struct {
 }
 
 type ServicesConfig struct {
-	Api    ServiceConfig `yaml:"api"`
-	Worker ServiceConfig `yaml:"worker"`
+	Api        ServiceConfig `yaml:"api"`
+	Worker     ServiceConfig `yaml:"worker"`
+	Projection ServiceConfig `yaml:"projection"`
 }
 
 type ServiceConfig struct {
@@ -48,9 +49,14 @@ type PostgresPoolConfig struct {
 }
 
 type KafkaConfig struct {
-	Brokers []string          `yaml:"brokers"`
-	Topics  KafkaTopicsConfig `yaml:"topics"`
-	GroupID string            `yaml:"group_id"`
+	Brokers  []string            `yaml:"brokers"`
+	Topics   KafkaTopicsConfig   `yaml:"topics"`
+	GroupIDs KafkaGroupIDsConfig `yaml:"group_ids"`
+}
+
+type KafkaGroupIDsConfig struct {
+	Worker     string `yaml:"worker"`
+	Projection string `yaml:"projection"`
 }
 
 type KafkaTopicsConfig struct {
@@ -96,11 +102,20 @@ func (c Config) Validate() error {
 	if c.Service.Worker.Name == "" {
 		errs = append(errs, errors.New("service.worker.name is required"))
 	}
+	if c.Service.Projection.Name == "" {
+		errs = append(errs, errors.New("service.projection.name is required"))
+	}
 	if c.Postgres.Url == "" {
 		errs = append(errs, errors.New("postgres.url is required"))
 	}
 	if len(c.Kafka.Brokers) == 0 {
 		errs = append(errs, errors.New("kafka.brokers must contain at least one entry"))
+	}
+	if c.Kafka.GroupIDs.Worker == "" {
+		errs = append(errs, errors.New("kafka.group_ids.worker is required"))
+	}
+	if c.Kafka.GroupIDs.Projection == "" {
+		errs = append(errs, errors.New("kafka.group_ids.projection is required"))
 	}
 	if c.Kafka.Topics.Commands == "" {
 		errs = append(errs, errors.New("kafka.topics.commands is required"))

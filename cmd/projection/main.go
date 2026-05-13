@@ -11,8 +11,7 @@ import (
 	"payment-gateway-service/internal/messaging/kafka"
 	"payment-gateway-service/internal/observability"
 	"payment-gateway-service/internal/repository/postgres"
-	"payment-gateway-service/internal/service/outbox"
-	"payment-gateway-service/internal/service/worker"
+	"payment-gateway-service/internal/service/projection"
 	"sync"
 	"syscall"
 	"time"
@@ -37,12 +36,12 @@ func run(logger *slog.Logger, configPath string) error {
 		return err
 	}
 
-	logger.Info("worker starting", "service", cfg.Service.Worker.Name)
+	logger.Info("projection starting", "service", cfg.Service.Projection.Name)
 
 	rootCtx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
 
-	shutdownTracing, err := observability.SetupTracing(rootCtx, cfg.Service.Worker.Name, cfg.Observability.OTLP.Endpoint)
+	shutdownTracing, err := observability.SetupTracing(rootCtx, cfg.Service.Projection.Name, cfg.Observability.OTLP.Endpoint)
 	if err != nil {
 		return err
 	}
@@ -60,21 +59,11 @@ func run(logger *slog.Logger, configPath string) error {
 	}
 	defer pool.Close()
 
-	eventStoreRepo := postgres.NewEventStoreRepository(pool)
+	paymentRepo := postgres.NewPaymentRepository(pool)
 
-	producer, err := kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topics.Commands, cfg.Kafka.Topics.Events)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := producer.Close(); err != nil {
-			logger.Warn("close kafka producer", "error", err)
-		}
-	}()
+	projectionService := projection.New(paymentRepo)
 
-	outboxRunner := outbox.New(eventStoreRepo, producer, logger, 50, 200*time.Millisecond)
-
-	consumer, err := kafka.NewConsumer(cfg.Kafka.Brokers, cfg.Kafka.GroupIDs.Worker)
+	consumer, err := kafka.NewConsumer(cfg.Kafka.Brokers, cfg.Kafka.GroupIDs.Projection)
 	if err != nil {
 		return err
 	}
@@ -84,28 +73,19 @@ func run(logger *slog.Logger, configPath string) error {
 		}
 	}()
 
-	paymentService := worker.New(eventStoreRepo)
-	consumerHandler := kafka.NewConsumerHandler(paymentService, logger)
+	consumerHandler := kafka.NewEventConsumerHandler(projectionService, logger)
 
 	var wg sync.WaitGroup
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
 		for {
-			if err := consumer.Consume(rootCtx, []string{cfg.Kafka.Topics.Commands}, consumerHandler); err != nil && !errors.Is(err, context.Canceled) {
+			if err := consumer.Consume(rootCtx, []string{cfg.Kafka.Topics.Events}, consumerHandler); err != nil && !errors.Is(err, context.Canceled) {
 				logger.Error("consume session", "error", err)
 			}
 			if rootCtx.Err() != nil {
 				return
 			}
-		}
-	}()
-
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		if err := outboxRunner.Run(rootCtx); err != nil && !errors.Is(err, context.Canceled) {
-			logger.Error("outbox stopped", "error", err)
 		}
 	}()
 

@@ -125,6 +125,21 @@ services:
       kafka-init:
         condition: service_completed_successfully
 
+  projection:
+    build:
+      context: .
+      args:
+        BUILD_TARGET: projection
+    volumes:
+       - ./config.yaml:/etc/payment-gateway/config.yaml:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+
   loadgen:
     build:
       context: .
