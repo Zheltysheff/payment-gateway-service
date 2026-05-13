@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"payment-gateway-service/internal/domain"
+	"payment-gateway-service/internal/service/outbox"
 	"payment-gateway-service/internal/service/worker"
 
 	"github.com/google/uuid"
@@ -58,6 +59,14 @@ const insertCommandQuery = `
 INSERT INTO processed_commands (command_id, payment_id, command_type) VALUES ($1, $2, $3)
 `
 
+const getUnpublishedQuery = `
+SELECT id, payment_id, event_type, payload, occurred_at FROM payment_events WHERE published_at IS NULL ORDER BY id ASC LIMIT $1
+`
+
+const markPublishedQuery = `
+UPDATE payment_events SET published_at = NOW() WHERE id = ANY($1)
+`
+
 func (t *eventStoreTx) IsCommandProcessed(ctx context.Context, commandID uuid.UUID) (bool, error) {
 	var exists bool
 	if err := t.tx.QueryRow(ctx, existsCommandQuery, commandID).Scan(&exists); err != nil {
@@ -82,16 +91,16 @@ func (t *eventStoreTx) LoadEvents(ctx context.Context, paymentID uuid.UUID) ([]d
 			return nil, fmt.Errorf("load events for payment %s: scan row: %w", paymentID, err)
 		}
 
-		e, err := domain.NewEvent(eventType)
+		event, err := domain.NewEvent(eventType)
 		if err != nil {
 			return nil, fmt.Errorf("load events for payment %s: unknown event type %q: %w", paymentID, eventType, err)
 		}
 
-		if err := json.Unmarshal(payload, e); err != nil {
+		if err := json.Unmarshal(payload, event); err != nil {
 			return nil, fmt.Errorf("load events for payment %s: unmarshal payload: %w", paymentID, err)
 		}
 
-		events = append(events, e)
+		events = append(events, event)
 	}
 
 	if err := rows.Err(); err != nil {
@@ -124,6 +133,51 @@ func (t *eventStoreTx) MarkCommandProcessed(
 	commandType worker.CommandType) error {
 	if _, err := t.tx.Exec(ctx, insertCommandQuery, commandID, paymentID, string(commandType)); err != nil {
 		return fmt.Errorf("mark command %s (%s) processed: %w", commandID, commandType, err)
+	}
+	return nil
+}
+
+func (s *EventStoreRepository) LoadUnpublishedEvents(ctx context.Context, limit int) ([]outbox.UnpublishedEvent, error) {
+	rows, err := s.pool.Query(ctx, getUnpublishedQuery, limit)
+	if err != nil {
+		return nil, fmt.Errorf("load unpublished events: %w", err)
+	}
+	defer rows.Close()
+
+	var events []outbox.UnpublishedEvent
+
+	for rows.Next() {
+		var event outbox.UnpublishedEvent
+
+		err := rows.Scan(
+			&event.ID,
+			&event.PaymentID,
+			&event.EventType,
+			&event.Payload,
+			&event.OccurredAt,
+		)
+
+		if err != nil {
+			return nil, fmt.Errorf("load unpublished events scan row: %w", err)
+		}
+
+		events = append(events, event)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("load unpublished events rows iter: %w", err)
+	}
+
+	return events, nil
+}
+
+func (s *EventStoreRepository) MarkEventsPublished(ctx context.Context, ids []int64) error {
+	if len(ids) == 0 {
+		return nil
+	}
+
+	if _, err := s.pool.Exec(ctx, markPublishedQuery, ids); err != nil {
+		return fmt.Errorf("mark published events: %w", err)
 	}
 	return nil
 }

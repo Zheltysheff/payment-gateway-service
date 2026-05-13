@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"flag"
 	"log/slog"
 	"os"
@@ -10,6 +11,7 @@ import (
 	"payment-gateway-service/internal/messaging/kafka"
 	"payment-gateway-service/internal/observability"
 	"payment-gateway-service/internal/repository/postgres"
+	"payment-gateway-service/internal/service/outbox"
 	"payment-gateway-service/internal/service/worker"
 	"sync"
 	"syscall"
@@ -60,6 +62,18 @@ func run(logger *slog.Logger, configPath string) error {
 
 	eventStoreRepo := postgres.NewEventStoreRepository(pool)
 
+	producer, err := kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topics.Commands, cfg.Kafka.Topics.Events)
+	if err != nil {
+		return err
+	}
+	defer func() {
+		if err := producer.Close(); err != nil {
+			logger.Warn("close kafka producer", "error", err)
+		}
+	}()
+
+	outboxRunner := outbox.New(eventStoreRepo, producer, logger, 50, 200*time.Millisecond)
+
 	consumer, err := kafka.NewConsumer(cfg.Kafka.Brokers, cfg.Kafka.GroupID)
 	if err != nil {
 		return err
@@ -74,16 +88,26 @@ func run(logger *slog.Logger, configPath string) error {
 	consumerHandler := kafka.NewConsumerHandler(paymentService, logger)
 
 	var wg sync.WaitGroup
-	wg.Go(func() {
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
 		for {
-			if err := consumer.Consume(rootCtx, []string{cfg.Kafka.Topics.Commands}, consumerHandler); err != nil {
+			if err := consumer.Consume(rootCtx, []string{cfg.Kafka.Topics.Commands}, consumerHandler); err != nil && !errors.Is(err, context.Canceled) {
 				logger.Error("consume session", "error", err)
 			}
 			if rootCtx.Err() != nil {
 				return
 			}
 		}
-	})
+	}()
+
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		if err := outboxRunner.Run(rootCtx); err != nil && !errors.Is(err, context.Canceled) {
+			logger.Error("outbox stopped", "error", err)
+		}
+	}()
 
 	<-rootCtx.Done()
 	logger.Info("shutdown signal received")

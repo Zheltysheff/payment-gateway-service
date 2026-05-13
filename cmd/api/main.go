@@ -64,7 +64,7 @@ func run(logger *slog.Logger, configPath string) error {
 	}
 	defer pool.Close()
 
-	producer, err := kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topics.Commands)
+	producer, err := kafka.NewProducer(cfg.Kafka.Brokers, cfg.Kafka.Topics.Commands, cfg.Kafka.Topics.Events)
 	if err != nil {
 		return err
 	}
