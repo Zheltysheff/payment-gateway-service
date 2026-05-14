@@ -17,6 +17,7 @@ type ClientConfig struct {
 type Config struct {
 	Client        ClientConfig        `yaml:"client"`
 	Service       ServicesConfig      `yaml:"service"`
+	PSP           PSPConfig           `yaml:"psp"`
 	Postgres      PostgresConfig      `yaml:"postgres"`
 	Kafka         KafkaConfig         `yaml:"kafka"`
 	Observability ObservabilityConfig `yaml:"observability"`
@@ -26,6 +27,12 @@ type ServicesConfig struct {
 	Api        ServiceConfig `yaml:"api"`
 	Worker     ServiceConfig `yaml:"worker"`
 	Projection ServiceConfig `yaml:"projection"`
+	Callback   ServiceConfig `yaml:"callback"`
+}
+
+type PSPConfig struct {
+	URL         string `yaml:"url"`
+	CallbackURL string `yaml:"callback_url"`
 }
 
 type ServiceConfig struct {
@@ -104,6 +111,18 @@ func (c Config) Validate() error {
 	}
 	if c.Service.Projection.Name == "" {
 		errs = append(errs, errors.New("service.projection.name is required"))
+	}
+	if c.Service.Callback.Name == "" {
+		errs = append(errs, errors.New("service.callback.name is required"))
+	}
+	if c.Service.Callback.HTTP.Port == 0 {
+		errs = append(errs, errors.New("service.callback.http.port is required"))
+	}
+	if c.PSP.URL == "" {
+		errs = append(errs, errors.New("psp.url is required"))
+	}
+	if c.PSP.CallbackURL == "" {
+		errs = append(errs, errors.New("psp.callback_url is required"))
 	}
 	if c.Postgres.Url == "" {
 		errs = append(errs, errors.New("postgres.url is required"))

@@ -124,6 +124,8 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+      mockpsp:
+        condition: service_started
 
   projection:
     build:
@@ -139,6 +141,31 @@ services:
         condition: service_healthy
       kafka-init:
         condition: service_completed_successfully
+
+  mockpsp:
+    build:
+      context: .
+      args:
+        BUILD_TARGET: mockpsp
+    ports:
+      - "8082:8082"
+
+  callback:
+    build:
+      context: .
+      args:
+        BUILD_TARGET: callback
+    volumes:
+      - ./config.yaml:/etc/payment-gateway/config.yaml:ro
+    ports:
+      - "8081:8081"
+    depends_on:
+      kafka:
+        condition: service_healthy
+      kafka-init:
+        condition: service_completed_successfully
+      jaeger:
+        condition: service_started
 
   loadgen:
     build:

@@ -95,6 +95,63 @@ func (h *EventConsumerHandler) handleMessage(ctx context.Context, msg *sarama.Co
 		}
 
 		return nil
+	case domain.EventTypePaymentCompleted:
+		var pbPce payments.PaymentCompletedEvent
+		if err := proto.Unmarshal(msg.Value, &pbPce); err != nil {
+			return fmt.Errorf("unmarshal proto: %w", err)
+		}
+
+		commandID, err := uuid.Parse(pbPce.GetCommandId())
+		if err != nil {
+			return fmt.Errorf("parse command_id: %w", err)
+		}
+		paymentID, err := uuid.Parse(pbPce.GetPaymentId())
+		if err != nil {
+			return fmt.Errorf("parse payment_id: %w", err)
+		}
+
+		event := domain.PaymentCompletedEvent{
+			PaymentID:  paymentID,
+			CommandID:  commandID,
+			OccurredAt: time.Unix(0, pbPce.GetOccurredAt()).UTC(),
+		}
+
+		if err := h.service.HandlePaymentCompleted(ctx, &event); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "handle failed")
+			return fmt.Errorf("handle completed payment %s with event %s: %w", paymentID, commandID, err)
+		}
+
+		return nil
+	case domain.EventTypePaymentFailed:
+		var pbPfe payments.PaymentFailedEvent
+		if err := proto.Unmarshal(msg.Value, &pbPfe); err != nil {
+			return fmt.Errorf("unmarshal proto: %w", err)
+		}
+
+		commandID, err := uuid.Parse(pbPfe.GetCommandId())
+		if err != nil {
+			return fmt.Errorf("parse command_id: %w", err)
+		}
+		paymentID, err := uuid.Parse(pbPfe.GetPaymentId())
+		if err != nil {
+			return fmt.Errorf("parse payment_id: %w", err)
+		}
+
+		event := domain.PaymentFailedEvent{
+			PaymentID:  paymentID,
+			CommandID:  commandID,
+			Reason:     pbPfe.GetReason(),
+			OccurredAt: time.Unix(0, pbPfe.GetOccurredAt()).UTC(),
+		}
+
+		if err := h.service.HandlePaymentFailed(ctx, &event); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "handle failed")
+			return fmt.Errorf("handle failed payment %s with event %s: %w", paymentID, commandID, err)
+		}
+
+		return nil
 	default:
 		h.logger.Warn("unknown event type", "type", eventType)
 		return nil

@@ -10,6 +10,14 @@ service:
     name: worker-service
   projection:
     name: projection-service
+  callback:
+    name: callback-service
+    http:
+      port: 8081
+
+psp:
+  url: http://mockpsp:8082
+  callback_url: http://callback:8081/webhooks/psp
 
 postgres:
   url: postgres://admin:admin@postgres:5432/payments?sslmode=disable

@@ -14,3 +14,16 @@ message CreatePaymentCommand {
   string user_id     = 7;
   int64  issued_at   = 8;
 }
+
+message MarkCompletedCommand {
+  string command_id  = 1;
+  string payment_id  = 2;
+  int64  issued_at   = 3;
+}
+
+message MarkFailedCommand {
+  string command_id  = 1;
+  string payment_id  = 2;
+  string reason      = 3;
+  int64  issued_at   = 4;
+}

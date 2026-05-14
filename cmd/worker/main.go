@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"payment-gateway-service/internal/config"
 	"payment-gateway-service/internal/messaging/kafka"
+	"payment-gateway-service/internal/messaging/psp"
 	"payment-gateway-service/internal/observability"
 	"payment-gateway-service/internal/repository/postgres"
 	"payment-gateway-service/internal/service/outbox"
@@ -84,7 +85,8 @@ func run(logger *slog.Logger, configPath string) error {
 		}
 	}()
 
-	paymentService := worker.New(eventStoreRepo)
+	pspClient := psp.New(cfg.PSP.URL, cfg.PSP.CallbackURL)
+	paymentService := worker.New(eventStoreRepo, pspClient, logger)
 	consumerHandler := kafka.NewConsumerHandler(paymentService, logger)
 
 	var wg sync.WaitGroup

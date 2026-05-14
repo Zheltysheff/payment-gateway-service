@@ -130,7 +130,7 @@ func (t *eventStoreTx) MarkCommandProcessed(
 	ctx context.Context,
 	commandID uuid.UUID,
 	paymentID uuid.UUID,
-	commandType worker.CommandType) error {
+	commandType domain.CommandType) error {
 	if _, err := t.tx.Exec(ctx, insertCommandQuery, commandID, paymentID, string(commandType)); err != nil {
 		return fmt.Errorf("mark command %s (%s) processed: %w", commandID, commandType, err)
 	}

@@ -4,10 +4,14 @@ import (
 	"context"
 	"fmt"
 	"payment-gateway-service/internal/domain"
+	"time"
+
+	"github.com/google/uuid"
 )
 
 type PaymentRepository interface {
-	Upsert(ctx context.Context, p domain.Payment) error
+	Insert(ctx context.Context, p domain.Payment) error
+	UpdateStatus(ctx context.Context, id uuid.UUID, status domain.Status, updatedAt time.Time) error
 }
 
 type PaymentService struct {
@@ -31,8 +35,22 @@ func (s *PaymentService) HandlePaymentCreated(ctx context.Context, ev *domain.Pa
 		UpdatedAt:  ev.OccurredAt,
 	}
 
-	if err := s.repo.Upsert(ctx, payment); err != nil {
+	if err := s.repo.Insert(ctx, payment); err != nil {
 		return fmt.Errorf("project payment created %s: %w", ev.PaymentID, err)
+	}
+	return nil
+}
+
+func (s *PaymentService) HandlePaymentCompleted(ctx context.Context, ev *domain.PaymentCompletedEvent) error {
+	if err := s.repo.UpdateStatus(ctx, ev.PaymentID, domain.StatusCompleted, ev.OccurredAt); err != nil {
+		return fmt.Errorf("project payment completed %s: %w", ev.PaymentID, err)
+	}
+	return nil
+}
+
+func (s *PaymentService) HandlePaymentFailed(ctx context.Context, ev *domain.PaymentFailedEvent) error {
+	if err := s.repo.UpdateStatus(ctx, ev.PaymentID, domain.StatusFailed, ev.OccurredAt); err != nil {
+		return fmt.Errorf("project payment failed %s: %w", ev.PaymentID, err)
 	}
 	return nil
 }

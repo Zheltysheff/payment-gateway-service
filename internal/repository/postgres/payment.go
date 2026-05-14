@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/jackc/pgx/v5"
@@ -26,10 +27,16 @@ FROM payments
 WHERE id = $1
 `
 
-const upsertQuery = `
+const insertQuery = `
 INSERT INTO payments (id, amount, currency, merchant_id, order_id, user_id, status, created_at, updated_at)
 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)
 ON CONFLICT (id) DO NOTHING
+`
+
+const updateStatusQuery = `
+UPDATE payments
+SET status = $2, updated_at = $3
+WHERE id = $1
 `
 
 func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.Payment, error) {
@@ -54,9 +61,16 @@ func (r *PaymentRepository) GetByID(ctx context.Context, id uuid.UUID) (*domain.
 	return &p, nil
 }
 
-func (r *PaymentRepository) Upsert(ctx context.Context, p domain.Payment) error {
-	if _, err := r.pool.Exec(ctx, upsertQuery, p.ID, p.Amount, p.Currency, p.MerchantID, p.OrderID, p.UserID, string(p.Status), p.CreatedAt, p.UpdatedAt); err != nil {
-		return fmt.Errorf("upsert payment %s: %w", p.ID, err)
+func (r *PaymentRepository) Insert(ctx context.Context, p domain.Payment) error {
+	if _, err := r.pool.Exec(ctx, insertQuery, p.ID, p.Amount, p.Currency, p.MerchantID, p.OrderID, p.UserID, string(p.Status), p.CreatedAt, p.UpdatedAt); err != nil {
+		return fmt.Errorf("insert payment %s: %w", p.ID, err)
+	}
+	return nil
+}
+
+func (r *PaymentRepository) UpdateStatus(ctx context.Context, id uuid.UUID, status domain.Status, updatedAt time.Time) error {
+	if _, err := r.pool.Exec(ctx, updateStatusQuery, id, string(status), updatedAt); err != nil {
+		return fmt.Errorf("update payment %s status %s: %w", id, status, err)
 	}
 	return nil
 }

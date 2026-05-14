@@ -20,7 +20,7 @@ func eventToProto(eventType string, payloadJSON []byte) (proto.Message, error) {
 
 	switch e := event.(type) {
 	case *domain.PaymentCreatedEvent:
-		pbPce := &payments.PaymentCreatedEvent{
+		return &payments.PaymentCreatedEvent{
 			PaymentId:  e.PaymentID.String(),
 			CommandId:  e.CommandID.String(),
 			Amount:     e.Amount,
@@ -29,9 +29,20 @@ func eventToProto(eventType string, payloadJSON []byte) (proto.Message, error) {
 			OrderId:    e.OrderID,
 			UserId:     e.UserID,
 			OccurredAt: e.OccurredAt.UnixNano(),
-		}
-
-		return pbPce, nil
+		}, nil
+	case *domain.PaymentCompletedEvent:
+		return &payments.PaymentCompletedEvent{
+			PaymentId:  e.PaymentID.String(),
+			CommandId:  e.CommandID.String(),
+			OccurredAt: e.OccurredAt.UnixNano(),
+		}, nil
+	case *domain.PaymentFailedEvent:
+		return &payments.PaymentFailedEvent{
+			PaymentId:  e.PaymentID.String(),
+			CommandId:  e.CommandID.String(),
+			Reason:     e.Reason,
+			OccurredAt: e.OccurredAt.UnixNano(),
+		}, nil
 	default:
 		return nil, fmt.Errorf("unsupported event type %q", eventType)
 	}

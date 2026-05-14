@@ -11,9 +11,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 	"google.golang.org/protobuf/proto"
 
-	payments "payment-gateway-service/internal/pb/payments"
-	"payment-gateway-service/internal/service/api"
-	"payment-gateway-service/internal/service/worker"
+	"payment-gateway-service/internal/domain"
 )
 
 type Producer struct {
@@ -41,28 +39,18 @@ func (p *Producer) Close() error {
 	return p.producer.Close()
 }
 
-func (p *Producer) PublishCreatePayment(ctx context.Context, cmd api.CreatePaymentCommand) error {
+func (p *Producer) PublishCommand(ctx context.Context, paymentID uuid.UUID, commandType domain.CommandType, pbMsg proto.Message) error {
 	tracer := otel.Tracer("kafka.producer")
 	ctx, span := tracer.Start(ctx, "publish "+p.commandTopic, trace.WithSpanKind(trace.SpanKindProducer))
 	defer span.End()
-	pbCmd := &payments.CreatePaymentCommand{
-		PaymentId:  cmd.PaymentID.String(),
-		CommandId:  cmd.CommandID.String(),
-		Amount:     cmd.Amount,
-		Currency:   cmd.Currency,
-		MerchantId: cmd.MerchantID,
-		OrderId:    cmd.OrderID,
-		UserId:     cmd.UserID,
-		IssuedAt:   cmd.IssuedAt.UnixNano(),
-	}
 
-	value, err := proto.Marshal(pbCmd)
+	value, err := proto.Marshal(pbMsg)
 	if err != nil {
-		return fmt.Errorf("Marshal CreatePaymentCommand: %w", err)
+		return fmt.Errorf("Marshal command: %w", err)
 	}
 
 	headers := []sarama.RecordHeader{
-		{Key: []byte("command_type"), Value: []byte(string(worker.CmdCreatePayment))},
+		{Key: []byte("command_type"), Value: []byte(commandType)},
 		{Key: []byte("content_type"), Value: []byte("application/x-protobuf")},
 	}
 
@@ -70,7 +58,7 @@ func (p *Producer) PublishCreatePayment(ctx context.Context, cmd api.CreatePayme
 
 	msg := &sarama.ProducerMessage{
 		Topic:   p.commandTopic,
-		Key:     sarama.StringEncoder(cmd.PaymentID.String()),
+		Key:     sarama.StringEncoder(paymentID.String()),
 		Value:   sarama.ByteEncoder(value),
 		Headers: headers,
 	}

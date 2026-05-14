@@ -14,3 +14,16 @@ message PaymentCreatedEvent {
   string user_id     = 7;
   int64  occurred_at = 8;
 }
+
+message PaymentCompletedEvent {
+  string payment_id  = 1;
+  string command_id  = 2;
+  int64  occurred_at = 3;
+}
+
+message PaymentFailedEvent {
+  string payment_id  = 1;
+  string command_id  = 2;
+  string reason      = 3;
+  int64  occurred_at = 4;
+}

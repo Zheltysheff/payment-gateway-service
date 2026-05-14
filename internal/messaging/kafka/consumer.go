@@ -86,39 +86,94 @@ func (h *ConsumerHandler) handleMessage(ctx context.Context, msg *sarama.Consume
 	if commandType == "" {
 		return fmt.Errorf("missing command_type header")
 	}
-	if worker.CommandType(commandType) != worker.CmdCreatePayment {
-		return fmt.Errorf("unsupported command_type %q", commandType)
-	}
 
-	var pbCmd payments.CreatePaymentCommand
-	if err := proto.Unmarshal(msg.Value, &pbCmd); err != nil {
-		return fmt.Errorf("unmarshal proto: %w", err)
-	}
+	switch domain.CommandType(commandType) {
+	case domain.CmdCreatePayment:
+		var pbCmd payments.CreatePaymentCommand
+		if err := proto.Unmarshal(msg.Value, &pbCmd); err != nil {
+			return fmt.Errorf("unmarshal proto: %w", err)
+		}
 
 	commandID, err := uuid.Parse(pbCmd.GetCommandId())
-	if err != nil {
-		return fmt.Errorf("parse command_id: %w", err)
-	}
-	paymentID, err := uuid.Parse(pbCmd.GetPaymentId())
-	if err != nil {
-		return fmt.Errorf("parse payment_id: %w", err)
-	}
+		if err != nil {
+			return fmt.Errorf("parse command_id: %w", err)
+		}
+		paymentID, err := uuid.Parse(pbCmd.GetPaymentId())
+		if err != nil {
+			return fmt.Errorf("parse payment_id: %w", err)
+		}
 
-	cmd := domain.CreatePaymentCommand{
-		CommandID:  commandID,
-		PaymentID:  paymentID,
-		Amount:     pbCmd.GetAmount(),
-		Currency:   pbCmd.GetCurrency(),
-		MerchantID: pbCmd.GetMerchantId(),
-		OrderID:    pbCmd.GetOrderId(),
-		UserID:     pbCmd.GetUserId(),
-		IssuedAt:   time.Unix(0, pbCmd.GetIssuedAt()).UTC(),
-	}
+		cmd := domain.CreatePaymentCommand{
+			CommandID:  commandID,
+			PaymentID:  paymentID,
+			Amount:     pbCmd.GetAmount(),
+			Currency:   pbCmd.GetCurrency(),
+			MerchantID: pbCmd.GetMerchantId(),
+			OrderID:    pbCmd.GetOrderId(),
+			UserID:     pbCmd.GetUserId(),
+			IssuedAt:   time.Unix(0, pbCmd.GetIssuedAt()).UTC(),
+		}
 
-	if err := h.service.HandleCreatePayment(ctx, cmd); err != nil {
-		span.RecordError(err)
-		span.SetStatus(codes.Error, "handle failed")
-		return fmt.Errorf("handle create payment %s with command %s: %w", paymentID, commandID, err)
+		if err := h.service.HandleCreatePayment(ctx, cmd); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "handle failed")
+			return fmt.Errorf("handle create payment %s with command %s: %w", paymentID, commandID, err)
+		}
+	case domain.CmdMarkCompleted:
+		var pbCmd payments.MarkCompletedCommand
+		if err := proto.Unmarshal(msg.Value, &pbCmd); err != nil {
+			return fmt.Errorf("unmarshal proto: %w", err)
+		}
+
+		commandID, err := uuid.Parse(pbCmd.GetCommandId())
+		if err != nil {
+			return fmt.Errorf("parse command_id: %w", err)
+		}
+		paymentID, err := uuid.Parse(pbCmd.GetPaymentId())
+		if err != nil {
+			return fmt.Errorf("parse payment_id: %w", err)
+		}
+
+		cmd := domain.MarkCompletedCommand{
+			CommandID: commandID,
+			PaymentID: paymentID,
+			IssuedAt:  time.Unix(0, pbCmd.GetIssuedAt()).UTC(),
+		}
+
+		if err := h.service.HandleMarkCompleted(ctx, cmd); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "handle failed")
+			return fmt.Errorf("handle completed payment %s with command %s: %w", paymentID, commandID, err)
+		}
+	case domain.CmdMarkFailed:
+		var pbCmd payments.MarkFailedCommand
+		if err := proto.Unmarshal(msg.Value, &pbCmd); err != nil {
+			return fmt.Errorf("unmarshal proto: %w", err)
+		}
+
+		commandID, err := uuid.Parse(pbCmd.GetCommandId())
+		if err != nil {
+			return fmt.Errorf("parse command_id: %w", err)
+		}
+		paymentID, err := uuid.Parse(pbCmd.GetPaymentId())
+		if err != nil {
+			return fmt.Errorf("parse payment_id: %w", err)
+		}
+
+		cmd := domain.MarkFailedCommand{
+			CommandID: commandID,
+			PaymentID: paymentID,
+			Reason:    pbCmd.GetReason(),
+			IssuedAt:  time.Unix(0, pbCmd.GetIssuedAt()).UTC(),
+		}
+
+		if err := h.service.HandleMarkFailed(ctx, cmd); err != nil {
+			span.RecordError(err)
+			span.SetStatus(codes.Error, "handle failed")
+			return fmt.Errorf("handle failed payment %s with command %s: %w", paymentID, commandID, err)
+		}
+	default:
+		return fmt.Errorf("unsupported command_type %q", commandType)
 	}
 
 	return nil
